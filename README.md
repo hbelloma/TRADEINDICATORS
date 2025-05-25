@@ -1,5 +1,3 @@
-Markdown
-
 #TRADE INDICATORS
 
 ## Description
