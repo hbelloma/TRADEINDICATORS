@@ -28,6 +28,9 @@ By default, the script is configured to use all five indicators, optimizing for 
 - **Backtesting Support**: Evaluate win rates and trade performance for different indicator combinations using TradingView's backtesting tools.
 - **Visualizations**: Plots indicators, buy/sell signals, and horizontal lines for overbought/oversold levels with customizable colors and background fills.
 
+![TLC_0TO100FIVEINDICATORS_VOLMOM](https://github.com/user-attachments/assets/c3f103ad-72a0-4960-88d0-d8079b1b9c1a)
+
+
 ## Installation
 1. Copy the provided Pine Script code into the Pine Editor on TradingView.
 2. Save the script and add it to your chart.
