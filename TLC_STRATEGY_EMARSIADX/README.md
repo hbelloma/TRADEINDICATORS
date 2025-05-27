@@ -105,5 +105,4 @@ For questions or support, contact Héctor Bello at [ayaxhector666@gmail.com](mai
 - The script includes commented-out backtesting results for various signal combinations, indicating optimal performance on 3-minute and 5-minute timeframes.
 - The commented `pyramiding`, `default_qty_type`, and `initial_capital` settings suggest potential for position sizing but are currently disabled.
 - Test the strategy thoroughly in a demo environment before using it in live trading.
-- The commented import statement (`import ayaxhector666/MLLIBRARY/2 as ml`) from the indicator version is not present, indicating no external dependencies.
 - Some commented signal conditions provide insights into alternative configurations tested by the author, which can be explored for further optimization.
