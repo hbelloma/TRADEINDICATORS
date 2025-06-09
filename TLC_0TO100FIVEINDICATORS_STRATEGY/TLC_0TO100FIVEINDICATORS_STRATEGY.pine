@@ -28,7 +28,7 @@ strategy("TLC_0TO100FIVEINDICATORS_STRATEGY", overlay=true, pyramiding=2, defaul
 
 
 fromDate = input.time(timestamp('17 Jul 2010 00:00 UTC'), 'From Date', tooltip="Start date-time for Strategy",group="Strategy Action setup")
-toDate = input.time(timestamp('31 Dec 2024 23:59 UTC'), 'To Date', tooltip="End date-time for Strategy")
+toDate = input.time(timestamp('31 Dec 2025 23:59 UTC'), 'To Date', tooltip="End date-time for Strategy")
 
 
 //Maximun Risk taken
