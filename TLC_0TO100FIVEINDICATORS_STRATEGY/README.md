@@ -87,8 +87,7 @@ For Bearish, all strategy with or without a risk plan get over the buy and hold 
 
 ![TLC_0TO100FI_1minALLINBear](https://github.com/user-attachments/assets/b30c9cbf-93d0-4df8-9c48-7dbe836384c6)
 
-
-
+As summary we can have an strategy due to this 5 indicators with high win ratio up to 70% but this doesnt waranty the a profitable strategy if there is no a risk plan, also we let the strategy take the stoploss and takeprofit as by the code itself, but also user can configure using percentage method for SL/TP to get better results, also strategy is recommend to be used on bearish periods
 
 
 ## Example Configuration
@@ -96,7 +95,7 @@ For Bearish, all strategy with or without a risk plan get over the buy and hold 
 - Set XMA guide to EMA(200) and enable volume filter with a medium threshold (1.0).
 - Use `PERCENTAGE` SL/TP with 2% stop loss and 10% take profit.
 - Select `WALK` risk plan for 30% max drawdown.
-- Set trading period from July 17, 2010, to December 31, 2025.
+- Set trading period from July 17, 2010, to December 31, 2025 or the desirable one.
 
 ## Notes
 - The strategy is designed for flexibility but requires careful parameter tuning for specific markets and timeframes.
