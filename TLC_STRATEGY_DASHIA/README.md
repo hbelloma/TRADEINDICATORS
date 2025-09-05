@@ -34,6 +34,34 @@ This strategy is tailored for Bitcoin (BTC) trading but can be adapted to other 
 
 Plot showing DASHIA strategy on a BTCUSDT chart for 1 H time-frame, we can see the Gaussian (bullish/blue, bearish/yellow curves) and Rational Quadratic (bullish/green, bearish/red curves) kernels and how its color change when bullish or bearish trends appear, also the buy (green) and sell (red) signals markers are shown, and a small chart on the upper right side showing an incode implemented backtest of 91.7%
 
+## Backtesting
+For a briefly description we shown the backtesting for 1 HOUR and 1 min charts for bullish periods, if you like to know more about the backtesting read the ArXiv: 
+
+
+-**1 HOUR Backtest Results**
+The 1-hour backtest covered 09 November 2021 to 30 May 2025, splitting into a bearish period (09 November 2021 to 12 January 2023, declining from $69,000 to $16,500) and a bullish period (12 January 2023 to 30 May 2025, rising to $120,000 ATH). Here we are asumming an ALLIN risk strategy unless a risk strategy is mentioned.
+
+<img width="1097" height="542" alt="Summary1HBear0911201_120123" src="https://github.com/user-attachments/assets/e3013b52-ce00-4b79-9ac8-1b2680be2814" />
+
+Backtesting Results on 1-Hour Chart bearish case (09/11/2021 to
+12/01/2023). Placeholder for equity curve and drawdown percentage, green-
+red line is for DASHIA performance and blue line for Buy and Hold strategy.
+
+-**1 minute Backtest Results**
+The Premium plan provides data for 2 weeks, but here we are using a deep
+test facility which gives data up to 2 months + 1 week. For the 1-minute
+backtest we use the period from 19 February 2025 to 30 May 2025 (Figure 5),
+splitting into a bearish period (19 February 2025 to 13 April 2025 declining
+from $98,000 to $75,000) and a bullish period (28 March 2025 to 30 May
+2025 rising to $120,000 ATH) we have used deep analysis, assuming full data
+acces and ALLIN risk stretegy.
+
+<img width="1173" height="547" alt="SUM1902_1304_2025" src="https://github.com/user-attachments/assets/641898e9-a2ab-4c36-9e56-b4ef720c301b" />
+
+Backtesting Results on 1-Minute Chart bearish case (19/02/2025 to
+13/04/2025). Placeholder for equity curve and drawdown percentage, green-
+red line is for DASHIA performance and blue line for Buy and Hold strategy.
+
 
 ## Installation
 1. Copy the Pine Script code into the Pine Editor on TradingView.
