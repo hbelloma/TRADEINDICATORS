@@ -30,6 +30,11 @@ This strategy is tailored for Bitcoin (BTC) trading but can be adapted to other 
   - Plots buy/sell signals, kernel estimates, and bar colors based on predictions.
   - Optional trade stats table and bar prediction values.
 
+<img width="1100" height="505" alt="DASHIASTEXAMPLE" src="https://github.com/user-attachments/assets/d9f32f57-e0c9-4930-a51f-ca2d0c2bf431" />
+
+Plot showing DASHIA strategy on a BTCUSDT chart for 1 H time-frame, we can see the Gaussian (bullish/blue, bearish/yellow curves) and Rational Quadratic (bullish/green, bearish/red curves) kernels and how its color change when bullish or bearish trends appear, also the buy (green) and sell (red) signals markers are shown, and a small chart on the upper right side showing an incode implemented backtest of 91.7%
+
+
 ## Installation
 1. Copy the Pine Script code into the Pine Editor on TradingView.
 2. Save the script and add it to your chart (preferably BTC/USD).
