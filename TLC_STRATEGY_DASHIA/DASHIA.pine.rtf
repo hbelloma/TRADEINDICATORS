@@ -1,0 +1,1081 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;\red24\green26\blue30;\red255\green255\blue255;}
+{\*\expandedcolortbl;;\cssrgb\c12157\c13725\c15686;\cssrgb\c100000\c100000\c100000;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs32 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/\
+// \'a9 ayaxhector666\
+\
+\
+// @version=5\
+strategy("Machine Learning STRATEGY: DASHIA","DASHIA_S", overlay=true, precision=4, pyramiding=1, default_qty_type=strategy.percent_of_equity, initial_capital = 10000, currency=currency.USD, max_labels_count=500)\
+//indicator('Machine Learning STRATEGY: DASHIA', 'DASHIA_S', true, precision=4, max_labels_count=500) // (Data Analyst and Swapper via Hawkish Intelligent Approach)\
+\
+fromDate = input.time(timestamp('17 Jul 2010 00:00 UTC'), 'From Date', tooltip="Start date-time for Strategy",group="Strategy Action setup")\
+toDate = input.time(timestamp('31 Dec 2024 23:59 UTC'), 'To Date', tooltip="End date-time for Strategy")\
+\
+\
+//Maximun Risk taken\
+Plan=input.string("ALLIN", title="Plan for risk management in Two Level Capital", options=["COOK", "WALK", "HAWK", "ALLIN"], tooltip = "COOK: maximun risk of 10% no leverage only x1, WALK: maximun risk of 30% moderate leverage x2-x5, HAWK: maximun risk of 50% high leverage x10-x100, ALLIN: maximun risk of 100% (No Drawdown limit)")\
+int drawdmaxperc=0\
+if(Plan=="COOK") \
+    drawdmaxperc:=10\
+else if(Plan=="WALKK")\
+    drawdmaxperc:=30\
+else if(Plan=="HAWK")\
+    drawdmaxperc:=50\
+else if(Plan=="ALLIN")\
+    drawdmaxperc:=100    \
+strategy.risk.max_drawdown(drawdmaxperc, strategy.percent_of_equity)\
+  \
+riskCapital = input.float(title="Risk % of capital", defval=100, minval=1, maxval = 100, tooltip ="Percentage of Capital in Equity for quantity buying in each position entry, as described in: qty = (strategy.equity*riskCapital/100)/(close*stopLoss/100))" )\
+\
+SLTPMethod =input.string("NONE", title="Method for setting SL and TP", options=["NONE", "PERCENTAGE", "ATR"], tooltip="This is the method used for setting the Stop Loss and Take Profit limits, NONE: SL/TP is not considered (Signal closes the position), PERCENTAGE: SL/TP given is in Percentage, ATR:  SL/TP is given by ATR Multiplier")\
+SLTPistaken= SLTPMethod=="NONE" ? false : true\
+SLTPviaPerc= SLTPMethod=="PERCENTAGE" ? true : false\
+SLTPviaATR = SLTPMethod=="ATR" ? true : false\
+\
+stopLoss=input.float(2.0,title="Stop Loss Percentage",minval=0.05, tooltip="Percentage of the action price where Stop Loss is taken") \
+takeProfit=input.float(10.0,title="Take Profit Percentage",minval=0.05, tooltip="Percentage of the action price where Take Profit is taken") \
+slMultiplier = input.float(1.0, title="SL Multiplier")\
+tpMultiplier = input.float(5.0, title="TP Multiplier")\
+SLTPviaTRAILING= input.bool(defval=false, title="Want trailing SL?", tooltip="Check if you want to use SL taked as trailing via a trailPercent")\
+trailPercent = input.float(1.0, title="Trail Percentage",minval=0.05)\
+\
+// QUANTITY OF CONTRACTS Q=Inv/Price\
+// Check how many units can be purchased based on risk management and stop loss\
+qty1 = (strategy.equity * riskCapital / 100 )/(close*stopLoss/100)\
+////check if cash is sufficient  to buy qty1  , if capital not available use the available capital only\
+qty1:= (qty1 * close >= strategy.equity ) ? (strategy.equity/close) : qty1\
+\
+\
+// ====================\
+// ==== Background ====\
+// ====================\
+\
+// When using Machine Learning algorithms like K-Nearest Neighbors, choosing an\
+// appropriate distance metric is essential. Euclidean Distance is often used as\
+// the default distance metric, but it may not always be the best choice. This is\
+// because market data is often significantly impacted by proximity to significant\
+// world events such as FOMC Meetings and Black Swan events. These major economic\
+// events can contribute to a warping effect analogous a massive object's \
+// gravitational warping of Space-Time. In financial markets, this warping effect \
+// operates on a continuum, which can analogously be referred to as "Price-Time".\
+\
+// To help to better account for this warping effect, Lorentzian Distance can be\
+// used as an alternative distance metric to Euclidean Distance. The geometry of\
+// Lorentzian Space can be difficult to visualize at first, and one of the best\
+// ways to intuitively understand it is through an example involving 2 feature\
+// dimensions (z=2). For purposes of this example, let's assume these two features\
+// are Relative Strength Index (RSI) and the Average Directional Index (ADX). In\
+// reality, the optimal number of features is in the range of 3-8, but for the sake\
+// of simplicity, we will use only 2 features in this example.\
+\
+// Fundamental Assumptions:\
+// (1) We can calculate RSI and ADX for a given chart.\
+// (2) For simplicity, values for RSI and ADX are assumed to adhere to a Gaussian \
+//     distribution in the range of 0 to 100.\
+// (3) The most recent RSI and ADX value can be considered the origin of a coordinate \
+//     system with ADX on the x-axis and RSI on the y-axis.\
+\
+\
+// Observations:\
+// (1) In Lorentzian Space, the shortest distance between two points is not \
+//     necessarily a straight line, but rather, a geodesic curve.\
+// (2) The warping effect of Lorentzian distance reduces the overall influence  \
+//     of outliers and noise.\
+// (3) Lorentzian Distance becomes increasingly different from Euclidean Distance \
+//     as the number of nearest neighbors used for comparison increases.\
+\
+// ======================\
+// ==== Custom Types ====\
+// ======================\
+\
+// This section uses PineScript's new Type syntax to define important data structures\
+// used throughout the script.\
+\
+type Settings\
+    float source\
+    int neighborsCount\
+    int maxBarsBack\
+    int featureCount\
+    int colorCompression\
+    bool showExits\
+    bool useDynamicExits\
+\
+type Label\
+    int long\
+    int short\
+    int neutral\
+\
+type FeatureArrays\
+    array<float> f1\
+    array<float> f2\
+    array<float> f3\
+    array<float> f4\
+    array<float> f5\
+    array<float> f6\
+    array<float> f7\
+    array<float> f8\
+    array<float> f9\
+    array<float> f10\
+\
+type FeatureSeries\
+    float f1\
+    float f2\
+    float f3\
+    float f4\
+    float f5\
+    float f6\
+    float f7\
+    float f8\
+    float f9\
+    float f10\
+\
+type MLModel\
+    int firstBarIndex\
+    array<int> trainingLabels\
+    int loopSize\
+    float lastDistance\
+    array<float> distancesArray\
+    array<int> predictionsArray\
+    int prediction\
+\
+type FilterSettings \
+    bool useVolatilityFilter\
+    bool useRegimeFilter\
+    bool useAdxFilter\
+    float regimeThreshold\
+    int adxThreshold\
+\
+type Filter\
+    bool volatility\
+    bool regime\
+    bool adx \
+\
+\
+// ==========================\
+// ==== Helper Functions ====\
+// ==========================\
+\
+// @function Returns the smoothed hyperbolic tangent of the input series.\
+// @param src <series float> The input series (i.e., the first-order derivative for price).\
+// @param quadraticMeanLength <int>  The length of the quadratic mean (RMS).\
+// @returns nDeriv <series float> The normalized derivative of the input series.\
+normalizeDeriv(series float src, int quadraticMeanLength) =>\
+    // Calculate the derivative of the input series.\
+    float deriv = src - src[2]\
+    // Calculate the quadratic mean of the derivative.\
+    quadraticMean = math.sqrt(nz(math.sum(math.pow(deriv, 2), quadraticMeanLength) / quadraticMeanLength))\
+    // Return the normalized derivative.\
+    nDeriv = deriv / quadraticMean\
+    nDeriv\
+\
+// @function Rescales a source value with an unbounded range to a target range.\
+// @param src <series float> The input series\
+// @param min <float> The minimum value of the unbounded range\
+// @param max <float> The maximum value of the unbounded range\
+// @returns <series float> The normalized series\
+normalize(series float src, float min, float max) => \
+    var _historicMin =  10e10\
+    var _historicMax = -10e10\
+    _historicMin := math.min(nz(src, _historicMin), _historicMin)\
+    _historicMax := math.max(nz(src, _historicMax), _historicMax)\
+    min + (max - min) * (src - _historicMin) / math.max(_historicMax - _historicMin, 10e-10)\
+\
+// @function Rescales a source value with a bounded range to another bounded range\
+// @param src <series float> The input series\
+// @param oldMin <float> The minimum value of the range to rescale from\
+// @param oldMax <float> The maximum value of the range to rescale from\
+// @param newMin <float> The minimum value of the range to rescale to\
+// @param newMax <float> The maximum value of the range to rescale to \
+// @returns <series float> The rescaled series\
+rescale(series float src, float oldMin, float oldMax, float newMin, float newMax) =>\
+    newMin + (newMax - newMin) * (src - oldMin) / math.max(oldMax - oldMin, 10e-10)\
+\
+\
+//=====================================\
+//== NORMALIZED INDICATOR FUNCTIONS ===\
+//=====================================\
+\
+// @function Returns the normalized STOCHK(RSI) ideal for use in ML algorithms.\
+// @param src <series float> The input series (i.e., the result of the STOCHK(RSI) calculation).\
+// @param n1 <int> The length of the STOCHK(RSI).\
+// @param n2 <int> The smoothing length of K in the STOCHK(RSI).\
+// @returns signal <series float> The normalized STOCHK(RSI).\
+n_STOCHK(series float src, simple int n1, simple int n2) =>\
+    rsi1 = ta.rsi(src, n1)\
+    k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, n1), n2)\
+    rescale(k, 0, 100, 0, 1)\
+\
+// @function Returns the normalized STOCHD(RSI) ideal for use in ML algorithms.\
+// @param src <series float> The input series (i.e., the result of the STOCHD(RSI) calculation). \
+// @param n1 <int> The length of the STOCHD(RSI)\
+// @param n2 <int> The smoothing length of K in the STOCHD(RSI).\
+// @param n3 <int> The smoothing length of D in the STOCHD(RSI).\
+// @returns signal <series float> The normalized STOCHD(RSI).\
+n_STOCHD(series float src, simple int n1, simple int n3) =>\
+    rsi1 = ta.rsi(src, n1)\
+    k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, n1), 3) \
+    d= ta.sma(k, n3)\
+    rescale(d, 0, 100, 0, 1)\
+\
+// @function Returns the normalized RSI ideal for use in ML algorithms.\
+// @param src <series float> The input series.\
+// @param n1 <int> The length of the RSI.\
+// @param n2 <int> The smoothing length of the RSI.\
+// @returns signal <series float> The normalized RSI.\
+n_rsi(series float src, simple int n1, simple int n2) =>\
+    rescale(ta.ema(ta.rsi(src, n1), n2), 0, 100, 0, 1)\
+\
+// @function Returns the normalized MFI ideal for use in ML algorithms.\
+// @param src <series float> The input series (i.e., the result of the MFI calculation).\
+// @param n1 <int> The length of the MFI.\
+// @param n2 <int> The smoothing length of the MFI.\
+// @returns signal <series float> The normalized MFI.\
+n_mfi(series float src, simple int n1, simple int n2) =>\
+    rescale(ta.ema(ta.mfi(src, n1), n2), 0, 100, 0, 1)\
+\
+// @function Returns the normalized RVI ideal for use in ML algorithms.\
+// @param src <series float> The input series (i.e., the result of the RVI calculation).\
+// @param n1 <int> The length of the RVI.\
+// @param n2 <int> The smoothing length of the RVI.\
+// @returns signal <series float> The normalized RVI.\
+n_rvi(series float src, simple int n1, simple int n2) =>\
+    stddev = ta.stdev(src, n1)\
+    upper = ta.ema(ta.change(src) <= 0 ? 0 : stddev, n1)\
+    lower = ta.ema(ta.change(src) > 0 ? 0 : stddev, n1)\
+    rvi = upper / (upper + lower) * 100\
+    rescale(ta.ema(rvi, n2), 0, 100, 0, 1)\
+\
+// @function Returns the normalized CCI ideal for use in ML algorithms.\
+// @param src <series float> The input series.\
+// @param n1 <int> The length of the CCI.\
+// @param n2 <int> The smoothing length of the CCI.\
+// @returns signal <series float> The normalized CCI.\
+n_cci(series float src, simple int n1, simple int n2) =>\
+    normalize(ta.ema(ta.cci(src, n1), n2), 0, 1)\
+\
+// @function Returns the normalized WaveTrend Classic series ideal for use in ML algorithms.\
+// @param src <series float> The input series.\
+// @param paramA <int> The first smoothing length for WaveTrend Classic.\
+// @param paramB <int> The second smoothing length for the WaveTrend Classic.\
+// @param transformLength <int> The length of the transform.\
+// @returns signal <series float> The normalized WaveTrend Classic series.\
+n_wt(series float src, simple int n1=10, simple int n2=11) =>\
+    ema1 = ta.ema(src, n1)\
+    ema2 = ta.ema(math.abs(src - ema1), n1)\
+    ci = (src - ema1) / (0.015 * ema2)\
+    wt1 = ta.ema(ci, n2) // tci\
+    wt2 = ta.sma(wt1, 4)\
+    normalize(wt1 - wt2, 0, 1)\
+\
+// @function Returns the normalized ADX ideal for use in ML algorithms.\
+// @param highSrc <series float> The input series for the high price.\
+// @param lowSrc <series float> The input series for the low price.\
+// @param closeSrc <series float> The input series for the close price.\
+// @param n1 <int> The length of the ADX.\
+n_adx(series float highSrc, series float lowSrc, series float closeSrc, simple int n1) =>\
+    length = n1\
+    th = 20\
+    tr = math.max(math.max(highSrc - lowSrc, math.abs(highSrc - nz(closeSrc[1]))), math.abs(lowSrc - nz(closeSrc[1])))\
+    directionalMovementPlus = highSrc - nz(highSrc[1]) > nz(lowSrc[1]) - lowSrc ? math.max(highSrc - nz(highSrc[1]), 0) : 0\
+    negMovement = nz(lowSrc[1]) - lowSrc > highSrc - nz(highSrc[1]) ? math.max(nz(lowSrc[1]) - lowSrc, 0) : 0\
+    trSmooth = 0.0\
+    trSmooth := nz(trSmooth[1]) - nz(trSmooth[1]) / length + tr\
+    smoothDirectionalMovementPlus = 0.0\
+    smoothDirectionalMovementPlus := nz(smoothDirectionalMovementPlus[1]) - nz(smoothDirectionalMovementPlus[1]) / length + directionalMovementPlus\
+    smoothnegMovement = 0.0\
+    smoothnegMovement := nz(smoothnegMovement[1]) - nz(smoothnegMovement[1]) / length + negMovement\
+    diPositive = smoothDirectionalMovementPlus / trSmooth * 100\
+    diNegative = smoothnegMovement / trSmooth * 100\
+    dx = math.abs(diPositive - diNegative) / (diPositive + diNegative) * 100 \
+    adx = ta.rma(dx, length)\
+    rescale(adx, 0, 100, 0, 1)\
+\
+// Second method for ADX \
+n_adx2(series float highS, series float lowS, series float closeS, simple int len) =>\
+	upadx = ta.change(highS)\
+    downadx = -ta.change(lowS)\
+    plusDM = na(upadx) ? na : (upadx > downadx and upadx > 0 ? upadx : 0)\
+    minusDM = na(downadx) ? na : (downadx > upadx and downadx > 0 ? downadx : 0)\
+	truerange = ta.rma(ta.tr, len)\
+	plus = fixnan(100 * ta.rma(plusDM, len) / truerange)\
+    minus = fixnan(100 * ta.rma(minusDM, len) / truerange)\
+	sum = plus + minus\
+	adx = 100 * ta.rma(math.abs(plus - minus) / (sum == 0 ? 1 : sum), len)\
+	//sig = adx(dilen, adxlen)\
+    rescale(adx, 0, 100, 0, 1)\
+\
+//==================\
+// ==== Kernels ====\
+//==================\
+// @function Rational Quadratic Kernel - An infinite sum of Gaussian Kernels of different length scales.\
+// @param _src <float series> The source series.\
+// @param _lookback <simple int> The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars.\
+// @param _relativeWeight <simple float> Relative weighting of time frames. Smaller values resut in a more stretched out curve and larger values will result in a more wiggly curve. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel.\
+// @param _startAtBar <simple int> Bar index on which to start regression. The first bars of a chart are often highly volatile, and omission of these initial bars often leads to a better overall fit.\
+// @returns yhat <float series> The estimated values according to the Rational Quadratic Kernel.\
+rationalQuadratic(series float _src, simple int _lookback, simple float _relativeWeight, simple int startAtBar) =>\
+	float _currentWeight = 0.\
+	float _cumulativeWeight = 0.\
+	_size = array.size(array.from(_src))\
+    for i = 0 to _size + startAtBar\
+        y = _src[i]\
+        w = math.pow(1 + (math.pow(i, 2) / ((math.pow(_lookback, 2) * 2 * _relativeWeight))), -_relativeWeight)\
+        _currentWeight += y*w\
+        _cumulativeWeight += w\
+    yhat = _currentWeight / _cumulativeWeight\
+\
+\
+// @function Gaussian Kernel - A weighted average of the source series. The weights are determined by the Radial Basis Function (RBF).\
+// @param _src <float series> The source series.\
+// @param _lookback <simple int> The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars.\
+// @param _startAtBar <simple int> Bar index on which to start regression. The first bars of a chart are often highly volatile, and omission of these initial bars often leads to a better overall fit.\
+// @returns yhat <float series> The estimated values according to the Gaussian Kernel.\
+gaussian(series float _src, simple int _lookback, simple int startAtBar) =>\
+    float _currentWeight = 0.\
+    float _cumulativeWeight = 0.\
+    _size = array.size(array.from(_src))\
+    for i = 0 to _size + startAtBar\
+        y = _src[i] \
+        w = math.exp(-math.pow(i, 2) / (2 * math.pow(_lookback, 2)))\
+        _currentWeight += y*w\
+        _cumulativeWeight += w\
+    yhat = _currentWeight / _cumulativeWeight\
+\
+// =================\
+// ==== Filters ====\
+// =================\
+\
+// # @regime_filter\
+// # @param src <series float> The source series.\
+// # @param threshold <float> The threshold.\
+// # @param useRegimeFilter <bool> Whether to use the regime filter.\
+// # @returns <bool> Boolean indicating whether or not to let the signal pass through the filter.\
+regime_filter(series float src=ohlc4, float threshold, bool useRegimeFilter) =>\
+    // Calculate the slope of the curve.\
+    value1 = 0.0\
+    value2 = 0.0\
+    klmf = 0.0\
+    value1 := 0.2 * (src - src[1]) + 0.8 * nz(value1[1])\
+    value2 := 0.1 * (high - low) + 0.8 * nz(value2[1])\
+    omega = math.abs(value1 / value2)\
+    alpha = (-math.pow(omega,2) + math.sqrt(math.pow(omega, 4) + 16 * math.pow(omega,2))) / 8 \
+    klmf := alpha * src + (1 - alpha) * nz(klmf[1])\
+    absCurveSlope = math.abs(klmf - klmf[1])\
+    exponentialAverageAbsCurveSlope = 1.0 * ta.ema(absCurveSlope, 200)\
+    normalized_slope_decline = (absCurveSlope - exponentialAverageAbsCurveSlope) / exponentialAverageAbsCurveSlope\
+    // Calculate the slope of the curve.\
+    useRegimeFilter ? normalized_slope_decline >= threshold : true\
+\
+// @function filter_adx\
+// @param src <series float> The source series.\
+// @param length <int> The length of the ADX.\
+// @param adxThreshold <int> The ADX threshold.\
+// @param useAdxFilter <bool> Whether to use the ADX filter.\
+// @returns <bool> Boolean indicating whether or not to let the signal pass through the adx filter.\
+\
+filter_adx(series float src=close, simple int length=14, int adxThreshold, bool useAdxFilter) =>\
+    tr = math.max(math.max(high - low, math.abs(high - nz(src[1]))), math.abs(low - nz(src[1])))\
+    directionalMovementPlus = high - nz(high[1]) > nz(low[1]) - low ? math.max(high - nz(high[1]), 0) : 0\
+    negMovement = nz(low[1]) - low > high - nz(high[1]) ? math.max(nz(low[1]) - low, 0) : 0\
+    trSmooth = 0.0\
+    trSmooth := nz(trSmooth[1]) - nz(trSmooth[1]) / length + tr\
+    smoothDirectionalMovementPlus = 0.0\
+    smoothDirectionalMovementPlus := nz(smoothDirectionalMovementPlus[1]) - nz(smoothDirectionalMovementPlus[1]) / length + directionalMovementPlus\
+    smoothnegMovement = 0.0\
+    smoothnegMovement := nz(smoothnegMovement[1]) - nz(smoothnegMovement[1]) / length + negMovement\
+    diPositive = smoothDirectionalMovementPlus / trSmooth * 100\
+    diNegative = smoothnegMovement / trSmooth * 100\
+    dx = math.abs(diPositive - diNegative) / (diPositive + diNegative) * 100\
+    adx = ta.rma(dx, length)\
+    useAdxFilter ? adx > adxThreshold : true\
+\
+// @function filter_volatility\
+// @param minLength <int> The minimum length of the ATR.\
+// @param maxLength <int> The maximum length of the ATR.\
+// @param useVolatilityFilter <bool> Whether to use the volatility filter.\
+// @returns <bool> Boolean indicating whether or not to let the signal pass through the filter.\
+filter_volatility(simple int minLength=1, simple int maxLength=10, bool useVolatilityFilter) =>\
+    recentAtr = ta.atr(minLength)\
+    historicalAtr = ta.atr(maxLength)\
+    useVolatilityFilter ? recentAtr > historicalAtr : true\
+\
+\
+filter_KDco(series float src, simple int n1, simple int n3, bool useKDcrossFilter)=>\
+    rsi1 = ta.rsi(src, n1)\
+    k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, n1), 3) \
+    d= ta.sma(k, n3)\
+    cokd = ta.crossover(k, d)\
+    useKDcrossFilter ? cokd : true\
+\
+filter_KDcu(series float src, simple int n1, simple int n3, bool useKDcrossFilter)=>\
+    rsi1 = ta.rsi(src, n1)\
+    k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, n1), 3) \
+    d= ta.sma(k, n3)\
+    cukd = ta.crossunder(k, d)\
+    useKDcrossFilter ? cukd : true\
+\
+//===========================\
+//========= COLORS ==========\
+//===========================\
+// @function Assigns varying shades of the color green based on the KNN classification\
+// @param prediction Value (int|float) of the prediction \
+// @returns color <color>\
+color_green(float prediction) =>\
+    switch\
+        prediction >= 9 => #15FF00\
+        prediction >= 8 => #15FF00E5\
+        prediction >= 7 => #09FF00CC \
+        prediction >= 6 => #09FF00B2\
+        prediction >= 5 => #09FF0099 \
+        prediction >= 4 => #15FF007F\
+        prediction >= 3 => #00FF0066\
+        prediction >= 2 => #09FF004C \
+        prediction >= 1 => #09FF0033 \
+        => #15FF0019\
+\
+// @function Assigns varying shades of the color red based on the KNN classification\
+// @param prediction Value of the prediction\
+// @returns color\
+color_red(float prediction) =>\
+    switch\
+        prediction >= 9 => #CC3311\
+        prediction >= 8 => #CC3311E5\
+        prediction >= 7 => #B23111CC\
+        prediction >= 6 => #B23111B2\
+        prediction >= 5 => #B2311199\
+        prediction >= 4 => #CC33117F\
+        prediction >= 3 => #CC331166\
+        prediction >= 2 => #CC33114C\
+        prediction >= 1 => #CC331133\
+        => #CC331119\
+\
+// =====================\
+// ==== Backtesting ====\
+// =====================\
+\
+// @function Performs a basic backtest using the specified parameters and conditions.\
+// @param high <series float> The input series for the high price.\
+// @param low <series float> The input series for the low price.\
+// @param open <series float> The input series for the open price.\
+// @param startLongTrade <series bool> The series of conditions that indicate the start of a long trade.\
+// @param endLongTrade <series bool> The series of conditions that indicate the end of a long trade.\
+// @param startShortTrade <series bool> The series of conditions that indicate the start of a short trade.\
+// @param endShortTrade <series bool> The series of conditions that indicate the end of a short trade.\
+// @param isEarlySignalFlip <bool> Whether or not the signal flip is early.\
+// @param maxBarsBackIndex <int> The maximum number of bars to go back in the backtest.\
+// @param thisBarIndex <int> The current bar index.\
+// @param src <series float> The source series.\
+// @param useWorstCase <bool> Whether to use the worst case scenario for the backtest.\
+// @returns <tuple strings> A tuple containing backtest values\
+backtest(series float high, series float low, series float open, series bool startLongTrade, series bool endLongTrade, series bool startShortTrade, series bool endShortTrade, series bool isEarlySignalFlip, int maxBarsBackIndex, int thisBarIndex, series float src, bool useWorstCase) =>\
+    marketPrice = useWorstCase ? src : (high + low + open + open)/4\
+    var float start_long_trade = marketPrice\
+    var float start_short_trade = marketPrice\
+    var float total_short_profit = 0.\
+    var float total_long_profit = 0.\
+    var int wins = 0\
+    var int losses = 0\
+    var int trade_count = 0\
+    var int early_signal_flip_count = 0\
+    var bool tookProfit = false\
+    lot_size = 1\
+    if thisBarIndex > maxBarsBackIndex\
+        trade_count := 0\
+        wins := 0\
+        losses := 0\
+        early_signal_flip_count := 0\
+        if startLongTrade\
+            start_short_trade := 0.\
+            early_signal_flip_count := isEarlySignalFlip ? 1 : 0\
+            start_long_trade := marketPrice\
+            trade_count := 1\
+        if endLongTrade\
+            delta = marketPrice - start_long_trade\
+            wins := delta > 0 ? 1 : 0\
+            losses := delta < 0 ? 1 : 0\
+            total_long_profit := delta * lot_size\
+        if startShortTrade\
+            start_long_trade := 0.\
+            start_short_trade := marketPrice\
+            trade_count := 1\
+        if endShortTrade\
+            early_signal_flip_count := isEarlySignalFlip ? 1 : 0\
+            delta = start_short_trade - marketPrice\
+            wins := delta > 0 ? 1 : 0\
+            losses := delta < 0 ? 1 : 0\
+            total_short_profit := delta * lot_size\
+    tradeStatsHeader = '\uc0\u55357 \u56520  Trade Stats'\
+    longProfit = ta.cum(total_long_profit)\
+    shortProfit = ta.cum(total_short_profit)\
+    longShortProfit = longProfit + shortProfit\
+    totalEarlySignalFlips = ta.cum(early_signal_flip_count)\
+    totalWins = ta.cum(wins)\
+    totalLosses = ta.cum(losses)\
+    totalTrades = ta.cum(wins+losses)\
+    winLossRatio = totalWins / totalTrades\
+    winRate = totalWins / (totalWins + totalLosses)\
+    [totalWins, totalLosses, totalEarlySignalFlips, totalTrades, tradeStatsHeader, winLossRatio, winRate]\
+\
+\
+// ==========================\
+// ==== Helper Functions ====\
+// ==========================\
+\
+series_from(feature_string, _close, _high, _low, _hlc3, f_paramA, f_paramB) =>\
+    switch feature_string\
+        "RSI" => n_rsi(_close, f_paramA, f_paramB)\
+        "WT" => n_wt(_hlc3, f_paramA, f_paramB)\
+        "CCI" => n_cci(_close, f_paramA, f_paramB)\
+        "ADX" => n_adx(_high, _low, _close, f_paramA)\
+        "STOCHK" => n_STOCHK(_close, f_paramA, f_paramB)\
+        "STOCHD" => n_STOCHD(_close, f_paramA, f_paramB)\
+        "MFI" => n_mfi(_close, f_paramA, f_paramB)\
+        "RVI" => n_rvi(_close, f_paramA, f_paramB)\
+        "ADX2" => n_adx(_high, _low, _close, f_paramA) //using oly ADX1\
+\
+get_lorentzian_distance(int i, int featureCount, FeatureSeries featureSeries, FeatureArrays featureArrays) =>\
+    switch featureCount\
+        10 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i))) + \
+             math.log(1+math.abs(featureSeries.f6 - array.get(featureArrays.f6, i))) + \
+             math.log(1+math.abs(featureSeries.f7 - array.get(featureArrays.f7, i))) + \
+             math.log(1+math.abs(featureSeries.f8 - array.get(featureArrays.f8, i))) + \
+             math.log(1+math.abs(featureSeries.f9 - array.get(featureArrays.f9, i))) + \
+             math.log(1+math.abs(featureSeries.f10 - array.get(featureArrays.f10, i)))\
+        9 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i))) + \
+             math.log(1+math.abs(featureSeries.f6 - array.get(featureArrays.f6, i))) + \
+             math.log(1+math.abs(featureSeries.f7 - array.get(featureArrays.f7, i))) + \
+             math.log(1+math.abs(featureSeries.f8 - array.get(featureArrays.f8, i))) + \
+             math.log(1+math.abs(featureSeries.f9 - array.get(featureArrays.f9, i))) \
+        8 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i))) + \
+             math.log(1+math.abs(featureSeries.f6 - array.get(featureArrays.f6, i))) + \
+             math.log(1+math.abs(featureSeries.f7 - array.get(featureArrays.f7, i))) + \
+             math.log(1+math.abs(featureSeries.f8 - array.get(featureArrays.f8, i))) \
+        7 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i))) + \
+             math.log(1+math.abs(featureSeries.f6 - array.get(featureArrays.f6, i))) + \
+             math.log(1+math.abs(featureSeries.f7 - array.get(featureArrays.f7, i))) \
+        6 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i))) + \
+             math.log(1+math.abs(featureSeries.f6 - array.get(featureArrays.f6, i))) \
+        5 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) + \
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) + \
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) + \
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) + \
+             math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i)))\
+        4 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +\
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) +\
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) +\
+             math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i)))\
+        3 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +\
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) +\
+             math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i)))\
+        2 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +\
+             math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i)))\
+\
+// ================  \
+// ==== Inputs ==== \
+// ================ \
+\
+// Settings Object: General User-Defined Inputs\
+Settings settings = \
+ Settings.new(\
+   input.source(title='Source', defval=close, group="General Settings", tooltip="Source of the input data"),\
+   input.int(title='Neighbors Count', defval=8, group="General Settings", minval=1, maxval=100, step=1, tooltip="Number of neighbors to consider"),\
+   input.int(title="Max Bars Back", defval=8000, group="General Settings"),  //8000 for max in premium account (20,000)\
+   input.int(title="Feature Count", defval=10, group="Feature Engineering", minval=2, maxval=10, tooltip="Number of features to use for ML predictions."),\
+   input.int(title="Color Compression", defval=1, group="General Settings", minval=1, maxval=10, tooltip="Compression factor for adjusting the intensity of the color scale."),\
+   input.bool(title="Show Default Exits", defval=false, group="General Settings", tooltip="Default exits occur exactly 4 bars after an entry signal. This corresponds to the predefined length of a trade during the model's training process.", inline="exits"),\
+   input.bool(title="Use Dynamic Exits", defval=false, group="General Settings", tooltip="Dynamic exits attempt to let profits ride by dynamically adjusting the exit threshold based on kernel regression logic.", inline="exits")\
+ )\
+   \
+// Trade Stats Settings\
+// Note: The trade stats section is NOT intended to be used as a replacement for proper backtesting. It is intended to be used for calibration purposes only.\
+showTradeStats = input.bool(true, 'Show Trade Stats', tooltip='Displays the trade stats for a given configuration. Useful for optimizing the settings in the Feature Engineering section. This should NOT replace backtesting and should be used for calibration purposes only. Early Signal Flips represent instances where the model changes signals before 4 bars elapses; high values can indicate choppy (ranging) market conditions.', group="General Settings")\
+useWorstCase = input.bool(false, "Use Worst Case Estimates", tooltip="Whether to use the worst case scenario for backtesting. This option can be useful for creating a conservative estimate that is based on close prices only, thus avoiding the effects of intrabar repainting. This option assumes that the user does not enter when the signal first appears and instead waits for the bar to close as confirmation. On larger timeframes, this can mean entering after a large move has already occurred. Leaving this option disabled is generally better for those that use this indicator as a source of confluence and prefer estimates that demonstrate discretionary mid-bar entries. Leaving this option enabled may be more consistent with traditional backtesting results.", group="General Settings")\
+\
+// Settings object for user-defined settings\
+FilterSettings filterSettings =\
+ FilterSettings.new(\
+   input.bool(title="Use Volatility Filter", defval=false, tooltip="Whether to use the volatility filter.", group="Filters"), //true before HBM change\
+   input.bool(title="Use Regime Filter", defval=false, group="Filters", inline="regime"), //true before HBM change\
+   input.bool(title="Use ADX Filter", defval=false, group="Filters", inline="adx"),\
+   input.float(title="Threshold", defval=-0.1, minval=-10, maxval=10, step=0.1, tooltip="Whether to use the trend detection filter. Threshold for detecting Trending/Ranging markets.", group="Filters", inline="regime"),\
+   input.int(title="Threshold", defval=20, minval=0, maxval=100, step=1, tooltip="Whether to use the ADX filter. Threshold for detecting Trending/Ranging markets.", group="Filters", inline="adx")\
+ )\
+\
+// Filter object for filtering the ML predictions\
+Filter filter =\
+ Filter.new(\
+   filter_volatility(1, 10, filterSettings.useVolatilityFilter),  \
+   regime_filter(ohlc4, filterSettings.regimeThreshold, filterSettings.useRegimeFilter),\
+   filter_adx(settings.source, 14, filterSettings.adxThreshold, filterSettings.useAdxFilter)\
+  )\
+\
+useCrossKDFilter = input.bool(title="Use KDcross Filter", defval=true, tooltip="Whether to use the crossing of Stochastic filter.", group="Filters", inline="KDcross"), //false before HBM change\
+isKDco= filter_KDco(settings.source, 14, 3, useCrossKDFilter)  \
+isKDcu= filter_KDcu(settings.source, 14, 3, useCrossKDFilter)  \
+\
+// Feature Variables: User-Defined Inputs for calculating Feature Series. \
+\
+f1_string = input.string(title="Feature 1",  options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="STOCHK", inline = "01", tooltip="The second feature to use for ML predictions.", group="Feature Engineering")\
+f1_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 1.", defval=14, inline = "02", group="Feature Engineering")\
+f1_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 1 (if applicable).", defval=3, inline = "02", group="Feature Engineering")\
+f2_string = input.string(title="Feature 2", options=["RSI", "STOCHK","STOCHD","MFI","RVI","ADX","ADX2","WT", "CCI"], defval="STOCHD", inline = "03", tooltip="The third feature to use for ML predictions.", group="Feature Engineering")\
+f2_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 2.", defval=14, inline = "04", group="Feature Engineering")\
+f2_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 2 (if applicable).", defval=3, inline = "04", group="Feature Engineering")\
+f3_string = input.string(title="Feature 3", options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="RSI", inline = "05", tooltip="The first feature to use for ML predictions.", group="Feature Engineering")\
+f3_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 3.", defval=14, inline = "06", group="Feature Engineering")\
+f3_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 3 (if applicable).", defval=1, inline = "06", group="Feature Engineering")\
+f4_string = input.string(title="Feature 4", options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="ADX", inline = "07", tooltip="The fourth feature to use for ML predictions.", group="Feature Engineering")\
+f4_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 4.", defval=14, inline = "08", group="Feature Engineering")\
+f4_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 4 (if applicable).", defval=1, inline = "08", group="Feature Engineering")\
+f5_string = input.string(title="Feature 5", options=["RSI", "STOCHK","STOCHD","MFI","RVI","ADX","ADX2","WT", "CCI"], defval="MFI", inline = "09", tooltip="The fourth feature to use for ML predictions.", group="Feature Engineering")\
+f5_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 5.", defval=14, inline = "10", group="Feature Engineering")\
+f5_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 5 (if applicable).", defval=1, inline = "10", group="Feature Engineering")\
+f6_string = input.string(title="Feature 6", options=["RSI", "STOCHK","STOCHD","MFI","RVI","ADX","ADX2","WT", "CCI"], defval="RVI", inline = "11", tooltip="The fifth feature to use for ML predictions.", group="Feature Engineering")\
+f6_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 6.", defval=14, inline = "12", group="Feature Engineering")\
+f6_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 6 (if applicable).", defval=1, inline = "12", group="Feature Engineering")\
+f7_string = input.string(title="Feature 7", options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="WT", inline = "13", tooltip="The second feature to use for ML predictions.", group="Feature Engineering")\
+f7_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 7.", defval=10, inline = "14", group="Feature Engineering")\
+f7_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 7 (if applicable).", defval=11, inline = "14", group="Feature Engineering")\
+f8_string = input.string(title="Feature 8", options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="CCI", inline = "15", tooltip="The third feature to use for ML predictions.", group="Feature Engineering")\
+f8_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 8.", defval=20, inline = "16", group="Feature Engineering")\
+f8_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 8 (if applicable).", defval=1, inline = "16", group="Feature Engineering")\
+f9_string = input.string(title="Feature 9", options=["RSI", "WT", "CCI", "ADX", "STOCHK","STOCHD","MFI","RVI","ADX2"], defval="RSI", inline = "17", tooltip="The fifth feature to use for ML predictions.", group="Feature Engineering")\
+f9_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 9.", defval=9, inline = "18", group="Feature Engineering")\
+f9_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 9 (if applicable).", defval=1, inline = "18", group="Feature Engineering")   \
+f10_string = input.string(title="Feature 10", options=["RSI", "STOCHK","STOCHD","MFI","RVI","ADX","ADX2","WT", "CCI"], defval="ADX2", inline = "19", tooltip="The seventh feature to use for ML predictions.", group="Feature Engineering")\
+f10_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 10.", defval=20, inline = "20", group="Feature Engineering")\
+f10_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 10 (if applicable).", defval=2, inline = "20", group="Feature Engineering")\
+\
+\
+// FeatureSeries Object: Calculated Feature Series based on Feature Variables\
+featureSeries = \
+ FeatureSeries.new(\
+   series_from(f1_string, close, high, low, hlc3, f1_paramA, f1_paramB), // f1\
+   series_from(f2_string, close, high, low, hlc3, f2_paramA, f2_paramB), // f2 \
+   series_from(f3_string, close, high, low, hlc3, f3_paramA, f3_paramB), // f3\
+   series_from(f4_string, close, high, low, hlc3, f4_paramA, f4_paramB), // f4\
+   series_from(f5_string, close, high, low, hlc3, f5_paramA, f5_paramB),  // f5,\
+   series_from(f6_string, close, high, low, hlc3, f6_paramA, f6_paramB), // f6\
+   series_from(f7_string, close, high, low, hlc3, f7_paramA, f7_paramB), // f7 \
+   series_from(f8_string, close, high, low, hlc3, f8_paramA, f8_paramB), // f8\
+   series_from(f9_string, close, high, low, hlc3, f9_paramA, f9_paramB), // f9\
+   series_from(f10_string, close, high, low, hlc3, f10_paramA, f10_paramB)  // f10\
+ )\
+\
+// FeatureArrays Variables: Storage of Feature Series as Feature Arrays Optimized for ML\
+// Note: These arrays cannot be dynamically created within the FeatureArrays Object Initialization and thus must be set-up in advance.\
+var f1Array = array.new_float()\
+var f2Array = array.new_float()\
+var f3Array = array.new_float()\
+var f4Array = array.new_float()\
+var f5Array = array.new_float()\
+var f6Array = array.new_float()\
+var f7Array = array.new_float()\
+var f8Array = array.new_float()\
+var f9Array = array.new_float()\
+var f10Array = array.new_float()\
+array.push(f1Array, featureSeries.f1)\
+array.push(f2Array, featureSeries.f2)\
+array.push(f3Array, featureSeries.f3)\
+array.push(f4Array, featureSeries.f4)\
+array.push(f5Array, featureSeries.f5)\
+array.push(f6Array, featureSeries.f6)\
+array.push(f7Array, featureSeries.f7)\
+array.push(f8Array, featureSeries.f8)\
+array.push(f9Array, featureSeries.f9)\
+array.push(f10Array, featureSeries.f10)\
+\
+// FeatureArrays Object: Storage of the calculated FeatureArrays into a single object\
+featureArrays = \
+ FeatureArrays.new(\
+  f1Array, // f1\
+  f2Array, // f2\
+  f3Array, // f3\
+  f4Array, // f4\
+  f5Array,  // f5,\
+  f6Array, // f6\
+  f7Array, // f7\
+  f8Array, // f8\
+  f9Array, // f9\
+  f10Array  // f10\
+ )\
+\
+// Label Object: Used for classifying historical data as training data for the ML Model\
+Label direction = \
+ Label.new(\
+   long=1, \
+   short=-1, \
+   neutral=0\
+  )\
+\
+// Derived from General Settings\
+maxBarsBackIndex = last_bar_index >= settings.maxBarsBack ? last_bar_index - settings.maxBarsBack : 0\
+\
+// EMA Settings \
+useEmaFilter = input.bool(title="Use EMA Filter", defval=false, group="Filters", inline="ema")\
+emaPeriod = input.int(title="Period", defval=200, minval=1, step=1, group="Filters", inline="ema", tooltip="The period of the EMA used for the EMA Filter.")\
+isEmaUptrend = useEmaFilter ? close > ta.ema(close, emaPeriod) : true\
+isEmaDowntrend = useEmaFilter ? close < ta.ema(close, emaPeriod) : true\
+useSmaFilter = input.bool(title="Use SMA Filter", defval=false, group="Filters", inline="sma")\
+smaPeriod = input.int(title="Period", defval=200, minval=1, step=1, group="Filters", inline="sma", tooltip="The period of the SMA used for the SMA Filter.")\
+isSmaUptrend = useSmaFilter ? close > ta.sma(close, smaPeriod) : true\
+isSmaDowntrend = useSmaFilter ? close < ta.sma(close, smaPeriod) : true\
+\
+// Nadaraya-Watson Kernel Regression Settings\
+useKernelFilter = input.bool(true, "Trade with Kernel", group="Kernel Settings", inline="kernel0")\
+h = input.int(8, 'Lookback Window', minval=3, tooltip='The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars. Recommended range: 3-50', group="Kernel Settings", inline="kernelboth1")\
+x = input.int(25, "Regression Level", tooltip='Bar index on which to start regression. Controls how tightly fit the kernel estimate is to the data. Smaller values are a tighter fit. Larger values are a looser fit. Recommended range: 2-25', group="Kernel Settings", inline="kernelboth2")\
+showKernelEstimate = input.bool(true, "Show Rational Quadratic Kernel", group="Kernel Settings", inline="kernel")\
+r = input.float(8., 'Relative Weighting', step=0.25, tooltip='Relative weighting of time frames. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel. Recommended range: 0.25-25', group="Kernel Settings", inline="kernel")\
+useKernelSmoothing = input.bool(false, "Enhance Kernel Smoothing", tooltip="Uses a crossover based mechanism to smoothen kernel color changes. This often results in less color transitions overall and may result in more ML entry signals being generated.", inline='kernelSg', group='Kernel Settings')\
+showKernelEstimateG = input.bool(true, "Show Gaussian Kernel", group="Kernel Settings", inline="kernelg")\
+lag = input.int(2, "Lag", tooltip="Lag for crossover detection. Lower values result in earlier crossovers. Recommended range: 1-2", inline='kernelg', group='Kernel Settings')\
+\
+// Display Settings\
+showBarColors = input.bool(false, "Show Bar Colors", tooltip="Whether to show the bar colors.", group="Display Settings")\
+showBarPredictions = input.bool(defval = false, title = "Show Bar Prediction Values", tooltip = "Will show the ML model's evaluation of each bar as an integer.", group="Display Settings")\
+useAtrOffset = input.bool(defval = false, title = "Use ATR Offset", tooltip = "Will use the ATR offset instead of the bar prediction offset.", group="Display Settings")\
+barPredictionsOffset = input.float(0, "Bar Prediction Offset", minval=0, tooltip="The offset of the bar predictions as a percentage from the bar high or close.", group="Display Settings")\
+\
+// =================================\
+// ==== Next Bar Classification ====\
+// =================================\
+\
+// This model specializes specifically in predicting the direction of price action over the course of the next 4 bars. \
+// To avoid complications with the ML model, this value is hardcoded to 4 bars but support for other training lengths may be added in the future.\
+//if time>= fromDate and time<= toDate \
+src = settings.source\
+y_train_series = src[4] < src[0] ? direction.short : src[4] > src[0] ? direction.long : direction.neutral\
+var y_train_array = array.new_int(0)\
+\
+// Variables used for ML Logic\
+var predictions = array.new_float(0)\
+var prediction = 0.\
+var signal = direction.neutral\
+var distances = array.new_float(0)\
+\
+array.push(y_train_array, y_train_series)\
+\
+// =========================\
+// ====  Core ML Logic  ====\
+// =========================\
+\
+// Approximate Nearest Neighbors Search with Lorentzian Distance:\
+// A novel variation of the Nearest Neighbors (NN) search algorithm that ensures a chronologically uniform distribution of neighbors.\
+\
+// In a traditional KNN-based approach, we would iterate through the entire dataset and calculate the distance between the current bar \
+// and every other bar in the dataset and then sort the distances in ascending order. We would then take the first k bars and use their \
+// labels to determine the label of the current bar. \
+\
+// There are several problems with this traditional KNN approach in the context of real-time calculations involving time series data:\
+// - It is computationally expensive to iterate through the entire dataset and calculate the distance between every historical bar and\
+//   the current bar.\
+// - Market time series data is often non-stationary, meaning that the statistical properties of the data change slightly over time.\
+// - It is possible that the nearest neighbors are not the most informative ones, and the KNN algorithm may return poor results if the\
+//   nearest neighbors are not representative of the majority of the data.\
+\
+// Previously, the user @capissimo attempted to address some of these issues in several of his PineScript-based KNN implementations by:\
+// - Using a modified KNN algorithm based on consecutive furthest neighbors to find a set of approximate "nearest" neighbors.\
+// - Using a sliding window approach to only calculate the distance between the current bar and the most recent n bars in the dataset.\
+\
+// Of these two approaches, the latter is inherently limited by the fact that it only considers the most recent bars in the overall dataset. \
+\
+// The former approach has more potential to leverage historical price action, but is limited by:\
+// - The possibility of a sudden "max" value throwing off the estimation\
+// - The possibility of selecting a set of approximate neighbors that are not representative of the majority of the data by oversampling \
+//   values that are not chronologically distinct enough from one another\
+// - The possibility of selecting too many "far" neighbors, which may result in a poor estimation of price action\
+\
+// To address these issues, a novel Approximate Nearest Neighbors (ANN) algorithm is used in this indicator.\
+\
+// In the below ANN algorithm:\
+// 1. The algorithm iterates through the dataset in chronological order, using the modulo operator to only perform calculations every 4 bars.\
+//    This serves the dual purpose of reducing the computational overhead of the algorithm and ensuring a minimum chronological spacing \
+//    between the neighbors of at least 4 bars.\
+// 2. A list of the k-similar neighbors is simultaneously maintained in both a predictions array and corresponding distances array.\
+// 3. When the size of the predictions array exceeds the desired number of nearest neighbors specified in settings.neighborsCount, \
+//    the algorithm removes the first neighbor from the predictions array and the corresponding distance array.\
+// 4. The lastDistance variable is overriden to be a distance in the lower 25% of the array. This step helps to boost overall accuracy \
+//    by ensuring subsequent newly added distance values increase at a slower rate.\
+// 5. Lorentzian distance is used as a distance metric in order to minimize the effect of outliers and take into account the warping of \
+//    "price-time" due to proximity to significant economic events.\
+\
+lastDistance = -1.0\
+size = math.min(settings.maxBarsBack-1, array.size(y_train_array)-1)\
+sizeLoop = math.min(settings.maxBarsBack-1, size)\
+\
+if bar_index >= maxBarsBackIndex //\{\
+    for i = 0 to sizeLoop //\{\
+        d = get_lorentzian_distance(i, settings.featureCount, featureSeries, featureArrays) \
+        if d >= lastDistance and i%4 //\{\
+            lastDistance := d            \
+            array.push(distances, d)\
+            array.push(predictions, math.round(array.get(y_train_array, i)))\
+            if array.size(predictions) > settings.neighborsCount //\{\
+                lastDistance := array.get(distances, math.round(settings.neighborsCount*3/4))\
+                array.shift(distances)\
+                array.shift(predictions)\
+            //\}\
+        //\}\
+    //\}\
+    prediction := array.sum(predictions)\
+//\}\
+\
+// ============================\
+// ==== Prediction Filters ====\
+// ============================\
+// User Defined Filters: Used for adjusting the frequency of the ML Model's predictions\
+filter_all = filter.volatility and filter.regime and filter.adx \
+\
+// Filtered Signal: The model's prediction of future price movement direction with user-defined filters applied\
+signal := prediction > 0 and filter_all ? direction.long : prediction < 0 and filter_all ? direction.short : nz(signal[1])\
+\
+// Bar-Count Filters: Represents strict filters based on a pre-defined holding period of 4 bars\
+var int barsHeld = 0\
+barsHeld := ta.change(signal) ? 0 : barsHeld + 1\
+isHeldFourBars = barsHeld == 4\
+isHeldLessThanFourBars = 0 < barsHeld and barsHeld < 4\
+\
+// Fractal Filters: Derived from relative appearances of signals in a given time series fractal/segment with a default length of 4 bars\
+isDifferentSignalType = ta.change(signal)\
+isEarlySignalFlip = ta.change(signal) and (ta.change(signal[1]) or ta.change(signal[2]) or ta.change(signal[3]))\
+isBuySignal = signal == direction.long and isEmaUptrend and isSmaUptrend  and isKDco  //Hector Added\
+isSellSignal = signal == direction.short and isEmaDowntrend and isSmaDowntrend  and isKDcu //Hector Added\
+isLastSignalBuy = signal[4] == direction.long and isEmaUptrend[4] and isSmaUptrend[4]\
+isLastSignalSell = signal[4] == direction.short and isEmaDowntrend[4] and isSmaDowntrend[4]\
+isNewBuySignal = isBuySignal and isDifferentSignalType\
+isNewSellSignal = isSellSignal and isDifferentSignalType\
+\
+// Kernel Regression Filters: Filters based on Nadaraya-Watson Kernel Regression using the Rational Quadratic Kernel\
+// For more information on this technique refer to my other open source indicator located here: \
+// https://www.tradingview.com/script/AWNvbPRM-Nadaraya-Watson-Rational-Quadratic-Kernel-Non-Repainting/\
+c_green = color.new(#49fa04, 11)\
+c_red = color.new(#fa3002, 5)\
+c_blue = color.new(#02ddfa, 0)\
+c_yellow = color.new(#faf602, 6)\
+\
+transparent = color.new(#000000, 100)\
+yhat1 = rationalQuadratic(settings.source, h, r, x) // kernels.rationalQuadratic(settings.source, h, r, x)\
+yhat2 = gaussian(settings.source, h-lag, x) // kernels.gaussian(settings.source, h-lag, x)\
+kernelEstimate = yhat1\
+kernelEstimateGauss = yhat2\
+\
+// Kernel Rates of Change\
+bool wasBearishRate = yhat1[2] > yhat1[1]\
+bool wasBullishRate = yhat1[2] < yhat1[1]\
+bool isBearishRate = yhat1[1] > yhat1\
+bool isBullishRate = yhat1[1] < yhat1\
+isBearishChange = isBearishRate and wasBullishRate\
+isBullishChange = isBullishRate and wasBearishRate\
+// Kernel Crossovers\
+bool isBullishCrossAlert = ta.crossover(yhat2, yhat1)\
+bool isBearishCrossAlert = ta.crossunder(yhat2, yhat1) \
+bool isBullishSmooth = yhat2 >= yhat1\
+bool isBearishSmooth = yhat2 <= yhat1\
+// Kernel Colors\
+color colorByCross = isBullishSmooth ? c_green : c_red\
+color colorByRate = isBullishRate ? c_green : c_red\
+color colorByCrossG = isBullishSmooth ? c_blue : c_yellow \
+color colorByRateG = isBullishRate ? c_blue : c_yellow \
+color plotColor = showKernelEstimate ? (useKernelSmoothing ? colorByCross : colorByRate) : transparent\
+color plotColorG = showKernelEstimateG ? (useKernelSmoothing ? colorByCrossG : colorByRateG) : transparent \
+plot(kernelEstimate, color=plotColor, linewidth=2, title="Rational Quadratic Kernel")\
+plot(kernelEstimateGauss, color=plotColorG, linewidth=2, title="Gaussian Kernel") \
+// Alert Variables\
+bool alertBullish = useKernelSmoothing ? isBullishCrossAlert : isBullishChange\
+bool alertBearish = useKernelSmoothing ? isBearishCrossAlert : isBearishChange\
+// Bullish and Bearish Filters based on Kernel\
+isBullish = useKernelFilter ? (useKernelSmoothing ? isBullishSmooth : isBullishRate) : true\
+isBearish = useKernelFilter ? (useKernelSmoothing ? isBearishSmooth : isBearishRate) : true\
+\
+// ===========================\
+// ==== Entries and Exits ====\
+// ===========================\
+\
+// Entry Conditions: Booleans for ML Model Position Entries\
+startLongTrade = isNewBuySignal and isBullish and isEmaUptrend and isSmaUptrend\
+startShortTrade = isNewSellSignal and isBearish and isEmaDowntrend and isSmaDowntrend\
+\
+\
+\
+// Dynamic Exit Conditions: Booleans for ML Model Position Exits based on Fractal Filters and Kernel Regression Filters\
+lastSignalWasBullish = ta.barssince(startLongTrade) < ta.barssince(startShortTrade)\
+lastSignalWasBearish = ta.barssince(startShortTrade) < ta.barssince(startLongTrade)\
+barsSinceRedEntry = ta.barssince(startShortTrade)\
+barsSinceRedExit = ta.barssince(alertBullish)\
+barsSinceGreenEntry = ta.barssince(startLongTrade)\
+barsSinceGreenExit = ta.barssince(alertBearish)\
+isValidShortExit = barsSinceRedExit > barsSinceRedEntry\
+isValidLongExit = barsSinceGreenExit > barsSinceGreenEntry\
+endLongTradeDynamic = (isBearishChange and isValidLongExit[1])\
+endShortTradeDynamic = (isBullishChange and isValidShortExit[1])\
+\
+// Fixed Exit Conditions: Booleans for ML Model Position Exits based on a Bar-Count Filters\
+endLongTradeStrict = ((isHeldFourBars and isLastSignalBuy) or (isHeldLessThanFourBars and isNewSellSignal and isLastSignalBuy)) and startLongTrade[4]\
+endShortTradeStrict = ((isHeldFourBars and isLastSignalSell) or (isHeldLessThanFourBars and isNewBuySignal and isLastSignalSell)) and startShortTrade[4]\
+isDynamicExitValid = not useEmaFilter and not useSmaFilter and not useKernelSmoothing\
+endLongTrade = settings.useDynamicExits and isDynamicExitValid ? endLongTradeDynamic : endLongTradeStrict \
+endShortTrade = settings.useDynamicExits and isDynamicExitValid ? endShortTradeDynamic : endShortTradeStrict\
+\
+\
+// %%%%%%%%%%%%%%%%%%%%%%%\
+// Set SL and TP levels\
+// %%%%%%%%%%%%%%%%%%%%%%%\
+\
+//stoploss and takeprofit by percentage\
+var float longStopLoss= na\
+var float longTakeProfit= na\
+var float shortStopLoss= na\
+var float shortTakeProfit= na\
+// FOR TRAILING SL\
+longstopLossPrice = src * (1 - (trailPercent / 100))\
+shortstopLossPrice = src * (1 + (trailPercent / 100))\
+var float longstopLossLevel = na\
+var float shortstopLossLevel = na\
+\
+\
+// Exit conditions\
+if(SLTPviaPerc==true)\
+    longStopLoss := strategy.position_avg_price*(1-(stopLoss*0.01)) // price*(1-(stopLoss*0.01))\
+    longTakeProfit := strategy.position_avg_price*(1+(takeProfit*0.01))   //price*(1+(takeProfit*0.01)) \
+    shortStopLoss := strategy.position_avg_price*(1+(stopLoss*0.01))   //price*(1+(stopLoss*0.01))\
+    shortTakeProfit := strategy.position_avg_price*(1-(takeProfit*0.01)) //  price*(1-(takeProfit*0.01))\
+// NOT YET IMP\
+if(SLTPviaTRAILING==true)\
+    longstopLossLevel := src > longstopLossPrice ? longstopLossPrice : longstopLossLevel[1]\
+    shortstopLossLevel := src < shortstopLossPrice ? shortstopLossPrice : shortstopLossLevel[1]\
+\
+//)=========================\
+//== STRATEGY ENTRY/EXIT ===\
+//==========================\
+if time>= fromDate and time<= toDate \
+    if (startLongTrade)\
+    //strategy.entry("BuySTR", strategy.long, alert_message="Long order opened")\
+        strategy.entry("BuySTR", strategy.long, qty=qty1, alert_message="Long order opened") //qty=qty1,alert_message="Long order opened"\
+        //strategy.entry("BuySTR", strategy.long, qty=qty1,stop=longStopLoss, limit=longTakeProfit,alert_message="Long order opened") \
+        //if (strategy.position_size > 0 and SLTPistaken and SLTPviaTRAILING and price < longstopLossLevel)\
+        //    strategy.exit("BuySTR",limit=longTakeProfit, trail_price = longstopLossLevel,trail_points = 10, comment="Long SL BY TRAILING")\
+        if (strategy.position_size > 0 and SLTPistaken)\
+            strategy.exit('BuySTR', from_entry='BuySTR', limit=longTakeProfit, stop=longStopLoss, comment='Buy: TP/SL')\
+    //        strategy.exit('BuySTR', from_entry='BuySTR', limit=longTakeProfit, stop=longStopLoss, trail_price=longstopLossLevel, comment='Buy: TP/SL with trail')\
+        //strategy.exit('BuyEXIT', from_entry='BuySTR', comment='Buy: TP/SL')        \
+        else if (endLongTrade) //strategy.position_size > 0 )//and endLongTrade)\
+            strategy.close("BuySTR", comment='Buy: CLOSE',qty=qty1, immediately=true)\
+    if (startShortTrade)\
+    //strategy.entry("SellSTR", strategy.short, alert_message="Short order opened")\
+        strategy.entry("SellSTR", strategy.short, qty=qty1, alert_message="Short order opened")\
+//        if (endShortTrade)\
+//            strategy.close("SellSTR", comment='Sell: TP/SL',qty=qty1)\
+        if (strategy.position_size < 0 and SLTPistaken)\
+            strategy.exit('SellEXIT', from_entry='SellSTR', limit=shortTakeProfit, stop=shortStopLoss, comment='Sell: TP/SL')\
+        else if (endShortTrade) //strategy.position_size < 0 )//and endShortTrade)\
+            strategy.close("SellSTR", comment='Sell: CLOSE',qty=qty1, immediately=true)\
+\
+\
+// =========================\
+// ==== Plotting Labels ====\
+// =========================\
+\
+// Note: These will not repaint once the most recent bar has fully closed. By default, signals appear over the last closed bar; to override this behavior set offset=0.\
+plotshape(startLongTrade ? low : na, 'Buy', shape.labelup, location.belowbar, color=color_green(prediction), size=size.small, offset=0) //ml.color_green \
+plotshape(startShortTrade ? high : na, 'Sell', shape.labeldown, location.abovebar, color_red(-prediction), size=size.small, offset=0)    //ml.color_red\
+plotshape(endLongTrade and settings.showExits ? high : na, 'StopBuy', shape.xcross, location.absolute, color=#3AFF17, size=size.tiny, offset=0)\
+plotshape(endShortTrade and settings.showExits ? low : na, 'StopSell', shape.xcross, location.absolute, color=#FD1707, size=size.tiny, offset=0)\
+\
+// ================\
+// ==== Alerts ====\
+// ================ \
+\
+// Separate Alerts for Entries and Exits\
+//alertcondition(startLongTrade, title='Open Long \uc0\u9650 ', message='LDC Open Long \u9650  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+//alertcondition(endLongTrade, title='Close Long \uc0\u9650 ', message='LDC Close Long \u9650  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+//alertcondition(startShortTrade, title='Open Short \uc0\u9660 ', message='LDC Open Short  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+//alertcondition(endShortTrade, title='Close Short \uc0\u9660 ', message='LDC Close Short \u9660  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+\
+// Combined Alerts for Entries and Exits\
+//alertcondition(startShortTrade or startLongTrade, title='Open Position \uc0\u9650 \u9660 ', message='LDC Open Position \u9650 \u9660  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+//alertcondition(endShortTrade or endLongTrade, title='Close Position \uc0\u9650 \u9660 ', message='LDC Close Position  \u9650 \u9660  | \{\{ticker\}\}@[\{\{close\}\}] | (\{\{interval\}\})')\
+\
+// Kernel Estimate Alerts\
+//alertcondition(condition=alertBullish, title='Kernel Bullish Color Change', message='LDC Kernel Bullish \uc0\u9650  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+//alertcondition(condition=alertBearish, title='Kernel Bearish Color Change', message='LDC Kernel Bearish \uc0\u9660  | \{\{ticker\}\}@\{\{close\}\} | (\{\{interval\}\})')\
+\
+// =========================\
+// ==== Display Signals ==== \
+// =========================\
+\
+atrSpaced = useAtrOffset ? ta.atr(1) : na\
+compressionFactor = settings.neighborsCount / settings.colorCompression\
+c_pred = prediction > 0 ? color.from_gradient(prediction, 0, compressionFactor, #787b86, #009988) : prediction <= 0 ? color.from_gradient(prediction, -compressionFactor, 0, #CC3311, #787b86) : na\
+c_label = showBarPredictions ? c_pred : na\
+c_bars = showBarColors ? color.new(c_pred, 50) : na\
+x_val = bar_index\
+y_val = useAtrOffset ? prediction > 0 ? high + atrSpaced: low - atrSpaced : prediction > 0 ? high + hl2*barPredictionsOffset/20 : low - hl2*barPredictionsOffset/30\
+label.new(x_val, y_val, str.tostring(prediction), xloc.bar_index, yloc.price, color.new(color.white, 100), label.style_label_up, c_label, size.normal, text.align_left)\
+barcolor(showBarColors ? color.new(c_pred, 50) : na)\
+\
+// ===================== \
+// ==== Backtesting ====\
+// =====================\
+\
+// The following can be used to stream signals to a backtest adapter\
+backTestStream = switch \
+    startLongTrade => 1\
+    endLongTrade => 2\
+    startShortTrade => -1\
+    endShortTrade => -2\
+plot(backTestStream, "Backtest Stream", display=display.none)\
+\
+// The following can be used to display real-time trade stats. This can be a useful mechanism for obtaining real-time feedback during Feature Engineering. This does NOT replace the need to properly backtest.\
+// Note: In this context, a "Stop-Loss" is defined instances where the ML Signal prematurely flips directions before an exit signal can be generated.\
+[totalWins, totalLosses, totalEarlySignalFlips, totalTrades, tradeStatsHeader, winLossRatio, winRate] = backtest(high, low, open, startLongTrade, endLongTrade, startShortTrade, endShortTrade, isEarlySignalFlip, maxBarsBackIndex, bar_index, settings.source, useWorstCase) //ml.backtest\
+\
+// @function init_table()\
+// @returns tbl <series table> The backtest results.\
+init_table() =>    \
+    c_transparent = color.new(color.black, 100)\
+    table.new(position.top_right, columns=2, rows=7, frame_color=c_transparent, frame_width=1, border_width=1, border_color=c_transparent)\
+\
+update_table(tbl, tradeStatsHeader, totalTrades, totalWins, totalLosses, winLossRatio, winRate, stopLosses) => \
+    c_transparent = color.new(color.black, 100)\
+    table.cell(tbl, 0, 0, tradeStatsHeader, text_halign=text.align_center, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 0, 1, 'Winrate', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 1, 1, str.tostring(totalWins / totalTrades, '#.#%'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 0, 2, 'Trades', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 1, 2, str.tostring(totalTrades, '#') + ' (' + str.tostring(totalWins, '#') + '|' + str.tostring(totalLosses, '#') + ')', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 0, 5, 'WL Ratio', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 1, 5, str.tostring(totalWins / totalLosses, '0.00'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 0, 6, 'Early Signal Flips', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+    table.cell(tbl, 1, 6, str.tostring(totalEarlySignalFlips, '#'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)\
+\
+if showTradeStats\
+    var tbl = init_table()\
+    if barstate.islast\
+        update_table(tbl, tradeStatsHeader, totalTrades, totalWins, totalLosses, winLossRatio, winRate, totalEarlySignalFlips)}
