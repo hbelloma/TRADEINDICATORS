@@ -1,13 +1,4 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fmodern\fcharset0 Courier;}
-{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
-{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\deftab720
-\pard\pardeftab720\partightenfactor0
-
-\f0\fs26\fsmilli13333 \cf0 \expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 # DASHIA: Machine Learning STRATEGY\
+ # DASHIA: Machine Learning STRATEGY\
 \
 ## Description\
 The `DASHIA` (Data Analyst and Swapper via Hawkish Intelligent Approach) Pine Script strategy, developed by H\'e9ctor Bello for Two Level Capital, is a sophisticated machine learning-based trading system designed for TradingView. It employs a Lorentzian Distance-based Approximate Nearest Neighbors (ANN) algorithm to predict price movements over a 4-bar horizon. The strategy integrates multiple technical indicators as features, including RSI, Stochastic RSI, MFI, RVI, ADX, CCI, and WaveTrend, and uses kernel regression (Rational Quadratic and Gaussian) for trend filtering. It supports customizable risk management, stop-loss (SL), and take-profit (TP) settings, with backtesting capabilities for performance evaluation.\
@@ -116,4 +107,3 @@ For questions or support, contact H\'e9ctor Bello at [ayaxhector666@gmail.com](m
   - Test in a demo environment before live trading.\
   - High leverage (e.g., HAWK, ALLIN plans) increases risk significantly.\
   - Ensure feature selections are unique to avoid redundancy in ML predictions.\
-}
