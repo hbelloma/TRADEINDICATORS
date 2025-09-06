@@ -128,7 +128,7 @@ red line is for DASHIA performance and blue line for Buy and Hold strategy.
 This source code is licensed under the [Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/).
 
 ## Contact
-For questions or support, contact H\'e9ctor Bello at [ayaxhector666@gmail.com](mailto:ayaxhector666@gmail.com).
+For questions or support, contact Héctor Bello at [ayaxhector666@gmail.com](mailto:ayaxhector666@gmail.com).
 
 ## Notes
 - **Intended Use**: Designed for educational purposes and testing on TradingView with Pine Script v5. Thoroughly backtest before live trading.
