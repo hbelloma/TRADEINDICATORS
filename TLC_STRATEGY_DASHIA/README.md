@@ -35,7 +35,8 @@ This strategy is tailored for Bitcoin (BTC) trading but can be adapted to other 
 Plot showing DASHIA strategy on a BTCUSDT chart for 1 H time-frame, we can see the Gaussian (bullish/blue, bearish/yellow curves) and Rational Quadratic (bullish/green, bearish/red curves) kernels and how its color change when bullish or bearish trends appear, also the buy (green) and sell (red) signals markers are shown, and a small chart on the upper right side showing an incode implemented backtest of 91.7%
 
 ## Backtesting
-For a briefly description we shown the backtesting for 1 HOUR and 1 min charts for bullish periods, if you like to know more about the backtesting read the ArXiv: 
+For a briefly description we shown the backtesting for 1 HOUR and 1 min charts for bullish periods, if you like to know more about the backtestisng read the paper draft   [DASHIA.pdf](https://github.com/user-attachments/files/22306018/DASHIA.pdf)
+
 
 
 -**1 HOUR Backtest Results**
