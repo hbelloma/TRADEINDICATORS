@@ -139,5 +139,7 @@ For questions or support, contact Héctor Bello at [ayaxhector666@gmail.com](mai
 - **Dependencies**: No external libraries required.
 - **Warnings**:
   - Test in a demo environment before live trading.
-  - High leverage (e.g., HAWK, ALLIN plans) increases risk significantly.
   - Ensure feature selections are unique to avoid redundancy in ML predictions.
+  - Not tested High leverage (e.g., HAWK, ALLIN plans) increases risk significantly.
+  - We have no tested how high volume positions oppened or closed by the strategy could affect the upcomming signal or the next ML decision, (it is suppossed that opening a large volume position could affect the behaviour)
+
